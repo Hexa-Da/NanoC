@@ -16,7 +16,15 @@ import lark
 from lark import Tree
 
 import codegen_func
-from codegen_base import Gen, asm_init_params, build_symbols
+from codegen_base import (
+    Gen,
+    Pp,
+    asm_init_params,
+    build_symbols,
+    pp_commande,
+    pp_expression,
+    pp_liste_vars,
+)
 from symboltable import SymbolTable
 
 grammaire: lark.Lark = lark.Lark(
@@ -95,9 +103,40 @@ def asm_programme(ast: Tree) -> str:
     return squelette
 
 
+def pp_programme(ast: Tree) -> str:
+    """Reconstruit le programme nanoC sous forme lisible (debug / cours)."""
+    symtab: SymbolTable = SymbolTable()
+    build_symbols(ast, symtab)
+    pp: Pp = Pp(symtab)
+
+    children: list[Tree] = list(ast.children)
+    funcs: list[Tree] = children[:-1]
+    main: Tree = children[-1]
+
+    parts: list[str] = [codegen_func.pp_fonction(f, pp) for f in funcs]
+    vs: str = pp_liste_vars(main.children[0])
+    body: str = pp_commande(main.children[1], pp)
+    ret: str = pp_expression(main.children[2], pp)
+    from codegen_base import _indent_block
+
+    main_s: str = (
+        f"main({vs}) {{\n"
+        f"{_indent_block(body)}\n"
+        f"    return {ret};\n"
+        f"}}"
+    )
+    parts.append(main_s)
+    return "\n\n".join(parts)
+
+
 if __name__ == "__main__":
+    import sys
+
     src: str = open("source.c").read()
     tree: Tree = grammaire.parse(src)
-    with open("resultat.asm", "w") as f:
-        f.write(asm_programme(tree))
-    print("resultat.asm généré.")
+    if "--pp" in sys.argv or "--pretty" in sys.argv:
+        print(pp_programme(tree))
+    else:
+        with open("resultat.asm", "w") as f:
+            f.write(asm_programme(tree))
+        print("resultat.asm généré.")

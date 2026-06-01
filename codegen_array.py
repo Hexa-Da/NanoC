@@ -65,6 +65,36 @@ def asm_len(name: str, gen: object) -> str:
     raise NotImplementedError("Dev C : à implémenter — len(t)")
 
 
+# ── pretty-print (texte nanoC lisible, parallèle aux asm_*) ───────────────
+
+
+def pp_decl(ast: Tree, pp: object) -> str:
+    """`int t[E];`"""
+    name: str = _ident(ast.children[0])
+    size: str = pp.expr(_tree(ast.children[1]))  # type: ignore[attr-defined]
+    return f"int {name}[{size}];"
+
+
+def pp_get(ast: Tree, pp: object) -> str:
+    """`t[i]` (expression)."""
+    name: str = _ident(ast.children[0])
+    idx: str = pp.expr(_tree(ast.children[1]))  # type: ignore[attr-defined]
+    return f"{name}[{idx}]"
+
+
+def pp_set(ast: Tree, pp: object) -> str:
+    """`t[i] = v;`"""
+    name: str = _ident(ast.children[0])
+    idx: str = pp.expr(_tree(ast.children[1]))  # type: ignore[attr-defined]
+    val: str = pp.expr(_tree(ast.children[2]))  # type: ignore[attr-defined]
+    return f"{name}[{idx}] = {val};"
+
+
+def pp_len(name: str, pp: object) -> str:
+    """`len(t)`"""
+    return f"len({name})"
+
+
 # ── helpers de lecture d'AST (réutilisables) ──────────────────────────────
 
 

@@ -89,6 +89,65 @@ def asm_del(ast: Tree, scope: object, gen: object) -> str:
     raise NotImplementedError("Dev B : à implémenter — del d[k]")
 
 
+def pp_new(name: str, pp: object) -> str:
+    """`d = dict();`"""
+    return f"{name} = dict();"
+
+
+def pp_assign_literal(name: str, rhs: Tree, pp: object) -> str:
+    """`d = {k:v, ...};` (commande)."""
+    return f"{name} = {pp_literal_expr(rhs, pp)};"
+
+
+def pp_literal_expr(rhs: Tree, pp: object) -> str:
+    """`{k1:v1, k2:v2}` (expression)."""
+    paires: Tree = _tree(rhs.children[0])
+    parts: list[str] = []
+    for paire in paires.children:
+        paire_t: Tree = _tree(paire)
+        key: str = pp.expr(_tree(paire_t.children[0]))  # type: ignore[attr-defined]
+        val: str = pp.expr(_tree(paire_t.children[1]))  # type: ignore[attr-defined]
+        parts.append(f"{key}:{val}")
+    return "{" + ", ".join(parts) + "}"
+
+
+def pp_set(ast: Tree, pp: object) -> str:
+    """`d[k] = v;`"""
+    name: str = _ident(ast.children[0])
+    key: str = pp.expr(_tree(ast.children[1]))  # type: ignore[attr-defined]
+    val: str = pp.expr(_tree(ast.children[2]))  # type: ignore[attr-defined]
+    return f"{name}[{key}] = {val};"
+
+
+def pp_get(ast: Tree, pp: object) -> str:
+    """`d[k]` (expression)."""
+    name: str = _ident(ast.children[0])
+    key: str = pp.expr(_tree(ast.children[1]))  # type: ignore[attr-defined]
+    return f"{name}[{key}]"
+
+
+def pp_len(name: str, pp: object) -> str:
+    """`len(d)`"""
+    return f"len({name})"
+
+
+def pp_del(ast: Tree, pp: object) -> str:
+    """`del d[k];`"""
+    name: str = _ident(ast.children[0])
+    key: str = pp.expr(_tree(ast.children[1]))  # type: ignore[attr-defined]
+    return f"del {name}[{key}];"
+
+
+def pp_for_in(ast: Tree, pp: object) -> str:
+    """`for (k in d) { ... }`"""
+    k_name: str = _ident(ast.children[0])
+    d_name: str = _ident(ast.children[1])
+    body: str = pp.cmd(_tree(ast.children[2]))  # type: ignore[attr-defined]
+    from codegen_base import _indent_block
+
+    return f"for ({k_name} in {d_name}) {{\n{_indent_block(body)}\n}}"
+
+
 def asm_for_in(ast: Tree, scope: object, gen: object) -> str:
     """`for (k in d) { ... }` : itère sur les clés des slots occupés.
 

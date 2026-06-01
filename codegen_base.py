@@ -3,14 +3,12 @@
 Responsabilités :
   - `build_symbols` : pré-passe qui remplit la table des symboles (types des
     variables globales, fonctions et leurs variables locales).
-  - `asm_expression` / `asm_commande` : génération des expressions et commandes
-    générales (entiers, opérateurs, if/while/print/affectation) et DISPATCH
-    vers les modules de feature selon le type lu dans la table des symboles.
-  - `Gen` : petit objet de contexte passé aux modules de feature pour qu'ils
-    puissent générer sous-expressions/sous-commandes sans s'importer entre eux.
+  - `asm_expression` / `asm_commande` : génération assembleur + DISPATCH.
+  - `pp_expression` / `pp_commande` : pretty-print (texte nanoC lisible) + DISPATCH.
+  - `Gen` / `Pp` : contextes passés aux modules de feature.
 
 Ce module importe les 3 modules de feature ; les modules de feature, eux,
-n'importent PAS codegen_base (ils reçoivent `gen`). -> pas d'import circulaire.
+n'importent PAS codegen_base (ils reçoivent `gen` ou `pp`). -> pas d'import circulaire.
 """
 
 from __future__ import annotations
@@ -45,6 +43,149 @@ class Gen:
 
     def new_label(self, prefix: str) -> str:
         return self.symtab.new_label(prefix)
+
+
+class Pp:
+    """Contexte de pretty-print (comme `Gen` pour l'assembleur).
+
+    `symtab` est optionnel : sans elle, le dispatch indexé utilise la forme
+    générique `x[i]` ; avec elle (après `build_symbols`), on délègue aux
+    modules array/dict comme pour le codegen.
+    """
+
+    def __init__(self, symtab: SymbolTable | None = None) -> None:
+        self.symtab: SymbolTable | None = symtab
+
+    def expr(self, ast: Tree) -> str:
+        return pp_expression(ast, self)
+
+    def cmd(self, ast: Tree) -> str:
+        return pp_commande(ast, self)
+
+
+def pp_liste_vars(ast: Tree) -> str:
+    """`x, y, z` à partir du nœud `liste_vars`."""
+    return ", ".join(_ident(t) for t in ast.children)
+
+
+def pp_liste_params(ast: Tree) -> str:
+    """Paramètres d'une fonction."""
+    return ", ".join(_ident(t) for t in ast.children)
+
+
+def _indent_block(text: str, spaces: int = 4) -> str:
+    if not text.strip():
+        return ""
+    prefix: str = " " * spaces
+    return "\n".join(prefix + line for line in text.splitlines())
+
+
+# ── pretty-print : expressions ─────────────────────────────────────────────
+
+
+def pp_expression(ast: Tree, pp: Pp) -> str:
+    data: str = ast.data
+    if data == "variable":
+        return _ident(ast.children[0])
+    if data == "entier":
+        return _token(ast.children[0])
+    if data == "binaire":
+        left: str = pp_expression(_tree(ast.children[0]), pp)
+        op: str = _token(ast.children[1])
+        right: str = pp_expression(_tree(ast.children[2]), pp)
+        return f"{left} {op} {right}"
+    if data == "appel_fonction":
+        return codegen_func.pp_appel(ast, pp)
+    if data == "acces_index":
+        return _pp_acces_index(ast, pp)
+    if data == "longueur":
+        return _pp_longueur(ast, pp)
+    if data == "dict_vide":
+        return "dict()"
+    if data == "dict_literal":
+        return codegen_dict.pp_literal_expr(ast, pp)
+    raise NotImplementedError(f"expression pp non gérée : {data!r}")
+
+
+def _pp_acces_index(ast: Tree, pp: Pp) -> str:
+    name: str = _ident(ast.children[0])
+    if pp.symtab is not None and pp.symtab.is_global(name):
+        vtype: str = pp.symtab.type_of(name)
+        if vtype == "array":
+            return codegen_array.pp_get(ast, pp)
+        if vtype == "dict":
+            return codegen_dict.pp_get(ast, pp)
+    return codegen_array.pp_get(ast, pp)
+
+
+def _pp_longueur(ast: Tree, pp: Pp) -> str:
+    arg: Tree = _tree(ast.children[0])
+    if arg.data == "variable":
+        name: str = _ident(arg.children[0])
+        if pp.symtab is not None and pp.symtab.is_global(name):
+            vtype: str = pp.symtab.type_of(name)
+            if vtype == "array":
+                return codegen_array.pp_len(name, pp)
+            if vtype == "dict":
+                return codegen_dict.pp_len(name, pp)
+        return f"len({name})"
+    inner: str = pp_expression(arg, pp)
+    return f"len({inner})"
+
+
+# ── pretty-print : commandes ──────────────────────────────────────────────
+
+
+def pp_commande(ast: Tree, pp: Pp) -> str:
+    data: str = ast.data
+    if data == "sequence":
+        lines: list[str] = [pp_commande(_tree(c), pp) for c in ast.children]
+        return "\n".join(lines)
+    if data == "assignation":
+        return _pp_assignation(ast, pp)
+    if data == "assignation_index":
+        return _pp_assignation_index(ast, pp)
+    if data == "pass":
+        return "pass;"
+    if data == "print":
+        return f"print({pp_expression(_tree(ast.children[0]), pp)});"
+    if data == "if":
+        test: str = pp_expression(_tree(ast.children[0]), pp)
+        body: str = _indent_block(pp_commande(_tree(ast.children[1]), pp))
+        return f"if ({test}) {{\n{body}\n}}"
+    if data == "while":
+        test: str = pp_expression(_tree(ast.children[0]), pp)
+        body: str = _indent_block(pp_commande(_tree(ast.children[1]), pp))
+        return f"while ({test}) {{\n{body}\n}}"
+    if data == "decl_tableau":
+        return codegen_array.pp_decl(ast, pp)
+    if data == "for_in":
+        return codegen_dict.pp_for_in(ast, pp)
+    if data == "del_index":
+        return codegen_dict.pp_del(ast, pp)
+    raise NotImplementedError(f"commande pp non gérée : {data!r}")
+
+
+def _pp_assignation(ast: Tree, pp: Pp) -> str:
+    name: str = _ident(ast.children[0])
+    rhs: Tree = _tree(ast.children[1])
+    if rhs.data == "dict_vide":
+        return codegen_dict.pp_new(name, pp)
+    if rhs.data == "dict_literal":
+        return codegen_dict.pp_assign_literal(name, rhs, pp)
+    rhs_s: str = pp_expression(rhs, pp)
+    return f"{name} = {rhs_s};"
+
+
+def _pp_assignation_index(ast: Tree, pp: Pp) -> str:
+    name: str = _ident(ast.children[0])
+    if pp.symtab is not None and pp.symtab.is_global(name):
+        vtype: str = pp.symtab.type_of(name)
+        if vtype == "array":
+            return codegen_array.pp_set(ast, pp)
+        if vtype == "dict":
+            return codegen_dict.pp_set(ast, pp)
+    return codegen_array.pp_set(ast, pp)
 
 
 # ── résolution d'adresse d'une variable scalaire entière ──────────────────

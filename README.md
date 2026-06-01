@@ -23,6 +23,7 @@ python3 -m venv .venv
 ```bash
 ./script.sh            # compile source.c puis lance ./resultat
 ./script.sh 3 7 42     # passe des arguments aux paramètres du main
+.venv/bin/python nanoC.py --pp   # affiche le programme reformaté (debug / cours)
 ```
 
 Le `return` du `main` devient le **code de sortie** ; chaque `print(e);`
@@ -32,9 +33,9 @@ affiche un entier sur sa propre ligne.
 
 | Fichier             | Rôle                                                   | Responsable |
 | ------------------- | ------------------------------------------------------ | ----------- |
-| `nanoC.py`          | grammaire Lark + orchestration + remplissage squelette | commun      |
+| `nanoC.py`          | grammaire, orchestration, `pp_programme`, `--pp`       | commun      |
 | `symboltable.py`    | types des variables + labels ASM + zone `.data`        | commun      |
-| `codegen_base.py`   | expressions, if/while/print, dispatch                  | commun      |
+| `codegen_base.py`   | expressions, if/while/print, dispatch + `pp_*`         | commun      |
 | `codegen_func.py`   | fonctions (pile, appels, return)                       | Dev A       |
 | `codegen_dict.py`   | dictionnaires (balayage linéaire)                      | Dev B       |
 | `codegen_array.py`  | tableaux 1D                                            | Dev C       |
