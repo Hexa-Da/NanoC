@@ -1,7 +1,4 @@
-"""Dev B — Dictionnaires int->int (À IMPLÉMENTER).
-
-Ce fichier est un SQUELETTE : signatures fixées, corps assembleur à écrire.
-Ne change pas les signatures : `codegen_base.py` appelle ces fonctions.
+"""Dev B — Dictionnaires int->int
 
 ────────────────────────────────────────────────────────────────────────────
 MODÈLE MÉMOIRE (sans runtime C, fourni par symboltable.py / emit_data)
@@ -44,8 +41,23 @@ from lark import Token, Tree
 def asm_new(name: str, gen: object) -> str:
     """`d = dict();` : vide le dictionnaire.
 
-    À faire : dcount_d = 0, dsize_d = 0, et mettre tous les du_d[i]=0 pour
-    i dans [0, CAP) (boucle avec une étiquette via gen.new_label).
+    Labels : gen.symtab.dcount(name), gen.symtab.dsize(name), gen.symtab.du(name).
+    À faire :
+      1. `mov qword [dcount_d], 0`
+      2. `mov qword [dsize_d], 0`
+      3. mettre tous les du_d[i]=0 pour i dans [0, CAP) via une boucle :
+           lab = gen.new_label("new")
+           `xor rax, rax`             ; compteur i = 0
+           `{lab}_loop:`
+           `cmp rax, {gen.symtab.CAP}`
+           `jge {lab}_end`
+           `mov qword [du_d + rax*8], 0`
+           `inc rax`
+           `jmp {lab}_loop`
+           `{lab}_end:`
+    Note : remettre uniquement dcount et dsize à 0 suffirait aussi (la recherche
+    se fait toujours dans [0, dcount)), mais zeroing du est plus sûr si tu
+    réutilises le dictionnaire plusieurs fois de suite.
     """
     raise NotImplementedError("Dev B : à implémenter — dict() (vidage)")
 

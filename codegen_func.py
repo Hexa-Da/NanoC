@@ -1,8 +1,4 @@
-"""Dev A — Fonctions, ABI System V AMD64 / Linux (À IMPLÉMENTER).
-
-Ce fichier est un SQUELETTE : signatures fixées, corps assembleur à écrire.
-Ne change pas les signatures : `codegen_base.py` (appels) et `nanoC.py`
-(définitions) appellent ces fonctions.
+"""Dev A — Fonctions, ABI System V AMD64 / Linux
 
 ────────────────────────────────────────────────────────────────────────────
 RAPPELS ABI System V (Linux x86_64)
@@ -12,8 +8,7 @@ RAPPELS ABI System V (Linux x86_64)
 
 MODÈLE PILE (fourni par symboltable.FuncInfo)
   - Les paramètres et variables locales sont des ENTIERS sur la pile.
-  - La i-ème variable locale est à `[rbp - info.offset(nom)]`
-    (offset = 8*(index+1)).
+  - La i-ème variable locale est à `[rbp - info.offset(nom)]`.
   - `info.params`      : liste ordonnée des paramètres.
   - `info.locals`      : params + variables locales (les params d'abord).
   - `info.frame_size()`: taille à réserver, déjà alignée sur 16.
@@ -36,6 +31,7 @@ from __future__ import annotations
 
 from lark import Token, Tree
 
+from codegen_analyse import ErreurCompilation
 from symboltable import ARG_REGS, MAX_ARGS, FuncInfo
 
 
@@ -90,8 +86,10 @@ def asm_appel(ast: Tree, scope: object, gen: object) -> str:
     args.children = liste d'expressions).
     Plan conseillé :
       - récupérer FuncInfo via gen.symtab.lookup_function(nom) ;
-      - VÉRIFIER l'arité (len(args) == len(info.params)) -> sinon TypeError ;
-      - refuser > MAX_ARGS arguments (NotImplementedError) ;
+      - obtenir le label : gen.symtab.func_label(nom) -> "func_nom" ;
+      - VÉRIFIER l'arité (len(args) == len(info.params)) -> sinon
+        raise ErreurCompilation(f"...") (pas TypeError : évite le traceback) ;
+      - VÉRIFIER > MAX_ARGS arguments -> raise ErreurCompilation(f"...") ;
       - évaluer chaque argument (gen.expr) et l'empiler, puis dépiler dans
         ARG_REGS en ordre inverse (pile équilibrée = alignement préservé) ;
       - `call func_nom`.

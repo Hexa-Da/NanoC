@@ -1,12 +1,8 @@
-"""Dev C — Tableaux 1D d'entiers (À IMPLÉMENTER).
-
-Ce fichier est un SQUELETTE : les contrats (signatures, ce que chaque fonction
-doit renvoyer) sont fixés, à toi d'écrire le corps assembleur. Ne change pas
-les signatures : `codegen_base.py` appelle ces fonctions par leur nom.
+"""Dev C — Tableaux 1D d'entiers 
 
 ────────────────────────────────────────────────────────────────────────────
 MODÈLE MÉMOIRE (sans runtime C, fourni par symboltable.py / emit_data)
-  Le prof demande « un pointeur vers le début du tableau + la taille ».
+  Le prof demande « un pointeur au début du tableau + la taille ».
   NanoC v1 implémente cela avec deux labels statiques dans .data :
 
     st.arr_data(name)  -> label `arr_t`    : `times CAP dq 0`
@@ -46,8 +42,12 @@ def asm_decl(ast: Tree, scope: object, gen: object) -> str:
     """`int t[E];` : fixe la longueur réelle du tableau.
 
     AST : ast.children = [Token(nom), expression_E].
-    À faire : évaluer E (gen.expr -> rax), puis stocker rax dans `arrlen_t`.
-    La zone `arr_t` est déjà mise à zéro par emit_data (rien à initialiser).
+    Labels : gen.symtab.arr_len(nom) -> "arrlen_t" (label à écrire).
+    À faire :
+      1. nom = ast.children[0].value
+      2. évaluer E : gen.expr(ast.children[1], scope) -> résultat dans rax.
+      3. stocker rax -> [arrlen_t] : `mov [gen.symtab.arr_len(nom)], rax`
+    La zone arr_t est déjà mise à zéro par emit_data (rien à initialiser).
     Précondition v1 : scope is None (tableau = globale du main) et 0 <= E <= CAP.
     """
     raise NotImplementedError("Dev C : à implémenter — déclaration de tableau")
@@ -57,7 +57,12 @@ def asm_get(ast: Tree, scope: object, gen: object) -> str:
     """`t[i]` : charge l'élément d'indice i dans rax.
 
     AST : ast.children = [Token(nom), expression_indice].
-    Indice : `mov rax, [arr_t + rax*8]` une fois l'indice calculé dans rax.
+    Labels : gen.symtab.arr_data(nom) -> "arr_t" (base du tableau).
+    À faire :
+      1. nom = ast.children[0].value
+      2. évaluer l'indice : gen.expr(ast.children[1], scope) -> rax.
+      3. lire l'élément  : `mov rax, [arr_t + rax*8]`
+         (rax = indice, *8 car chaque entier fait 8 octets / qword).
     """
     raise NotImplementedError("Dev C : à implémenter — lecture t[i]")
 
@@ -66,14 +71,23 @@ def asm_set(ast: Tree, scope: object, gen: object) -> str:
     """`t[i] = v;` : écrit la valeur v à l'indice i.
 
     AST : ast.children = [Token(nom), expression_indice, expression_valeur].
-    Astuce pile : évalue la valeur, empile-la, évalue l'indice, dépile la
-    valeur dans rbx, puis `mov [arr_t + rax*8], rbx` (rax = indice).
+    Labels : gen.symtab.arr_data(nom) -> "arr_t".
+    À faire :
+      1. nom = ast.children[0].value
+      2. évaluer la valeur  : gen.expr(ast.children[2], scope) -> rax ; push rax.
+      3. évaluer l'indice   : gen.expr(ast.children[1], scope) -> rax.
+      4. dépiler la valeur  : pop rbx.
+      5. écrire             : `mov [arr_t + rax*8], rbx`
     """
     raise NotImplementedError("Dev C : à implémenter — écriture t[i] = v")
 
 
 def asm_len(name: str, gen: object) -> str:
-    """`len(t)` : charge la longueur réelle du tableau dans rax (depuis arrlen_t)."""
+    """`len(t)` : charge la longueur réelle du tableau dans rax.
+
+    Labels : gen.symtab.arr_len(name) -> "arrlen_t".
+    À faire : `mov rax, [arrlen_t]`
+    """
     raise NotImplementedError("Dev C : à implémenter — len(t)")
 
 

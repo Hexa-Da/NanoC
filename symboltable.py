@@ -3,8 +3,7 @@
 Rôle :
   1. Mémoriser le TYPE de chaque variable globale du `main` :
      "int" | "array" | "dict". C'est ce qui permet, plus tard, de choisir
-     le bon code pour `t[i]` (tableau) ou `d[k]` (dictionnaire) — le conseil
-     prof du "left hand side".
+     le bon code pour `t[i]` (tableau) ou `d[k]` (dictionnaire).
   2. Mémoriser les fonctions de l'utilisateur (paramètres + corps + retour),
      avec l'emplacement sur la pile de chaque variable locale.
   3. Fabriquer de façon centralisée tous les NOMS DE LABELS assembleur, pour
