@@ -98,8 +98,15 @@ def expr_type(ast: Tree, scope: object, symtab: SymbolTable) -> str:
         name: str = ident(ast.children[0])
         if isinstance(scope, FuncInfo):
             # Les variables locales de fonctions sont toujours des entiers.
+            if name not in scope.locals:
+                raise ErreurCompilation(
+                    f"variable inconnue dans la fonction {scope.name!r} : {name!r}"
+                )
             return "int"
-        return symtab.type_of(name)
+        try:
+            return symtab.type_of(name)
+        except NameError:
+            raise ErreurCompilation(f"variable globale inconnue : {name!r}") from None
 
     if data == "binaire":
         # L'opération elle-même produit un int ; les opérandes seront vérifiés
