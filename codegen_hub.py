@@ -8,6 +8,7 @@ import codegen_array
 import codegen_dict
 import codegen_func
 import codegen_lang
+from codegen_analyse import checktype
 from codegen_ast import ident, tree
 from symboltable import SymbolTable
 
@@ -71,6 +72,9 @@ def asm_expression(ast: Tree, scope: object, gen: Gen) -> str:
 
 def _asm_acces_index(ast: Tree, scope: object, gen: Gen) -> str:
     name: str = ident(ast.children[0])
+    indice: Tree = tree(ast.children[1])
+    # Précondition : l'indice doit être un entier (pas un tableau ni un dict).
+    checktype(indice, scope, gen.symtab, "int", f"indice de '{name}'")
     vtype: str = gen.symtab.type_of(name)
     if vtype == "array":
         return codegen_array.asm_get(ast, scope, gen)
@@ -80,11 +84,18 @@ def _asm_acces_index(ast: Tree, scope: object, gen: Gen) -> str:
 
 
 def _asm_longueur(ast: Tree, scope: object, gen: Gen) -> str:
+    from codegen_analyse import ErreurCompilation
+
     arg: Tree = tree(ast.children[0])
     if arg.data != "variable":
         raise NotImplementedError("len(...) attend une variable tableau/dict")
     name: str = ident(arg.children[0])
     vtype: str = gen.symtab.type_of(name)
+    # Précondition : len() n'est valide que sur un tableau ou un dictionnaire.
+    if vtype == "int":
+        raise ErreurCompilation(
+            f"len('{name}') interdit : '{name}' est un entier, pas un tableau/dict"
+        )
     if vtype == "array":
         return codegen_array.asm_len(name, gen)
     if vtype == "dict":
@@ -124,11 +135,18 @@ def _asm_assignation(ast: Tree, scope: object, gen: Gen) -> str:
         return codegen_dict.asm_new(name, gen)
     if rhs.data == "dict_literal":
         return codegen_dict.asm_literal(name, rhs, scope, gen)
+    # Précondition : la valeur assignée doit être un entier scalaire.
+    checktype(rhs, scope, gen.symtab, "int", f"valeur assignée à '{name}'")
     return codegen_lang.asm_assign_int(name, rhs, scope, gen)
 
 
 def _asm_assignation_index(ast: Tree, scope: object, gen: Gen) -> str:
     name: str = ident(ast.children[0])
+    indice: Tree = tree(ast.children[1])
+    valeur: Tree = tree(ast.children[2])
+    # Préconditions : indice et valeur doivent être des entiers.
+    checktype(indice, scope, gen.symtab, "int", f"indice de '{name}'")
+    checktype(valeur, scope, gen.symtab, "int", f"valeur assignée à '{name}[...]'")
     vtype: str = gen.symtab.type_of(name)
     if vtype == "array":
         return codegen_array.asm_set(ast, scope, gen)

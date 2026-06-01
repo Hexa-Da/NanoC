@@ -43,11 +43,16 @@ def asm_entier(ast: Tree) -> str:
 
 
 def asm_binaire(ast: Tree, scope: object, gen: object) -> str:
+    from codegen_analyse import checktype
     from codegen_hub import asm_expression
 
     left: Tree = tree(ast.children[0])
     op: str = token(ast.children[1])
     right: Tree = tree(ast.children[2])
+    # Précondition : les deux opérandes doivent être des entiers.
+    st: SymbolTable = gen.symtab  # type: ignore[attr-defined]
+    checktype(left, scope, st, "int", f"opérande gauche de '{op}'")
+    checktype(right, scope, st, "int", f"opérande droit de '{op}'")
     base: str = (
         asm_expression(right, scope, gen)
         + "push rax\n"
@@ -64,8 +69,12 @@ def asm_binaire(ast: Tree, scope: object, gen: object) -> str:
 
 
 def asm_print(expr: Tree, scope: object, gen: object) -> str:
+    from codegen_analyse import checktype
     from codegen_hub import asm_expression
 
+    # Précondition : print n'accepte que des entiers (printf("%lld", …)).
+    st: SymbolTable = gen.symtab  # type: ignore[attr-defined]
+    checktype(expr, scope, st, "int", "argument de print")
     code: str = asm_expression(expr, scope, gen)
     code += "mov rsi, rax\n"
     code += "mov rdi, format\n"

@@ -1,4 +1,10 @@
-"""Analyse du programme : remplit la table des symboles avant la génération."""
+"""Analyse du programme : remplit la table des symboles avant la génération.
+
+Exporte aussi `ErreurCompilation`, l'exception unique utilisée dans tout le
+compilateur pour signaler une erreur au programmeur nanoC (type incorrect,
+variable inconnue, arité mauvaise…). Elle est interceptée dans `nanoC.py`
+et affichée sans traceback Python.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +12,10 @@ from lark import Tree
 
 from codegen_ast import ident, tree
 from symboltable import FuncInfo, SymbolTable
+
+
+class ErreurCompilation(Exception):
+    """Erreur de compilation nanoC — affichée proprement, sans traceback."""
 
 
 def build_symbols(programme: Tree, symtab: SymbolTable) -> None:
@@ -62,6 +72,78 @@ def _register_main(main: Tree, symtab: SymbolTable) -> None:
     for t in vars_node.children:
         symtab.declare_main_param(ident(t))
     _collect_main(tree(main.children[1]), symtab)
+
+
+# ---------------------------------------------------------------------------
+# Vérification de types — expr_type / checktype
+# ---------------------------------------------------------------------------
+
+def expr_type(ast: Tree, scope: object, symtab: SymbolTable) -> str:
+    """Retourne le type de l'expression `ast` : "int", "array" ou "dict".
+
+    Préconditions :
+      - `ast` est un nœud d'expression Lark (Tree).
+      - `symtab` a déjà été remplie par `build_symbols`.
+      - `scope` est soit None (main), soit un objet `FuncInfo` (corps de fonction).
+
+    Invariant : toute expression NanoC a exactement l'un des trois types.
+    Lève `ErreurCompilation` si le type ne peut pas être déterminé.
+    """
+    data: str = ast.data
+
+    if data == "entier":
+        return "int"
+
+    if data == "variable":
+        name: str = ident(ast.children[0])
+        if isinstance(scope, FuncInfo):
+            # Les variables locales de fonctions sont toujours des entiers.
+            return "int"
+        return symtab.type_of(name)
+
+    if data == "binaire":
+        # L'opération elle-même produit un int ; les opérandes seront vérifiés
+        # séparément par checktype dans codegen_lang.
+        return "int"
+
+    if data == "appel_fonction":
+        # Les fonctions nanoC retournent toujours un int.
+        return "int"
+
+    if data == "acces_index":
+        # t[i] ou d[k] → la valeur stockée est toujours un int.
+        return "int"
+
+    if data == "longueur":
+        # len(t) → int.
+        return "int"
+
+    if data in ("dict_vide", "dict_literal"):
+        return "dict"
+
+    raise ErreurCompilation(f"expression de type inconnu : {data!r}")
+
+
+def checktype(
+    ast: Tree,
+    scope: object,
+    symtab: SymbolTable,
+    attendu: str,
+    contexte: str = "",
+) -> None:
+    """Vérifie que le type de `ast` est `attendu`.
+
+    Précondition : `attendu` est "int", "array" ou "dict".
+    Lève `ErreurCompilation` avec un message lisible si le type ne correspond pas.
+    Le paramètre `contexte` est une courte description de l'endroit où l'erreur
+    survient (ex. "opérande gauche de '+'") pour aider le débutant.
+    """
+    obtenu: str = expr_type(ast, scope, symtab)
+    if obtenu != attendu:
+        detail: str = f" ({contexte})" if contexte else ""
+        raise ErreurCompilation(
+            f"type incorrect{detail} : attendu '{attendu}', obtenu '{obtenu}'"
+        )
 
 
 def _collect_main(node: Tree, symtab: SymbolTable) -> None:

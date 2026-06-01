@@ -16,6 +16,7 @@ import lark
 from lark import Tree
 
 import codegen_func
+from codegen_analyse import ErreurCompilation
 from codegen_base import (
     Gen,
     Pp,
@@ -133,10 +134,18 @@ if __name__ == "__main__":
     import sys
 
     src: str = open("source.c").read()
-    tree: Tree = grammaire.parse(src)
-    if "--pp" in sys.argv or "--pretty" in sys.argv:
-        print(pp_programme(tree))
-    else:
-        with open("resultat.asm", "w") as f:
-            f.write(asm_programme(tree))
-        print("resultat.asm généré.")
+    try:
+        tree: Tree = grammaire.parse(src)
+        if "--pp" in sys.argv or "--pretty" in sys.argv:
+            print(pp_programme(tree))
+        else:
+            with open("resultat.asm", "w") as f:
+                f.write(asm_programme(tree))
+            print("resultat.asm généré.")
+    except lark.exceptions.UnexpectedInput as e:
+        print(f"Erreur de syntaxe (ligne {e.line}, col {e.column}) :")
+        print(f"  {e.get_context(src, 40)}")
+        sys.exit(1)
+    except ErreurCompilation as e:
+        print(f"Erreur de compilation : {e}")
+        sys.exit(1)

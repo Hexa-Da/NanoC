@@ -6,10 +6,22 @@ les signatures : `codegen_base.py` appelle ces fonctions par leur nom.
 
 ────────────────────────────────────────────────────────────────────────────
 MODÈLE MÉMOIRE (sans runtime C, fourni par symboltable.py / emit_data)
-  Un tableau `t` réserve une zone statique de capacité fixe :
-    - st.arr_data(name)  -> label `arr_t`    : `times CAP dq 0` (les éléments)
-    - st.arr_len(name)   -> label `arrlen_t` : `dq 0`           (longueur réelle)
-  Adressage absolu (compatible `gcc -no-pie`) : `[arr_t + rax*8]`.
+  Le prof demande « un pointeur vers le début du tableau + la taille ».
+  NanoC v1 implémente cela avec deux labels statiques dans .data :
+
+    st.arr_data(name)  -> label `arr_t`    : `times CAP dq 0`
+      └─ C'est le "pointeur de début" : adresse absolue du 1er élément.
+         Accès à l'élément i : [arr_t + rax*8]   (rax = indice, 8 = sizeof int64)
+
+    st.arr_len(name)   -> label `arrlen_t` : `dq 0`
+      └─ C'est la "taille" : valeur fixée par `int t[E];` au moment de la décl.
+         Lecture : mov rax, [arrlen_t]
+
+  Ce couple (arr_t, arrlen_t) est l'équivalent de { int* ptr; int len; } en C,
+  sans allocation dynamique (tout est résolu à la compilation, `-no-pie`).
+
+  CAP = capacité maximale réservée (voir symboltable.SymbolTable.CAP). L'accès
+  hors-bornes n'est pas vérifié en v1 (à ajouter en v2).
 
 OUTILS FOURNIS via `gen` (objet de contexte) :
   - gen.expr(ast, scope) -> str : génère une expression ; RÉSULTAT DANS rax.
