@@ -35,7 +35,12 @@ affiche un entier sur sa propre ligne.
 | ------------------- | ------------------------------------------------------ | ----------- |
 | `nanoC.py`          | grammaire, orchestration, `pp_programme`, `--pp`       | commun      |
 | `symboltable.py`    | types des variables + labels ASM + zone `.data`        | commun      |
-| `codegen_base.py`   | expressions, if/while/print, dispatch + `pp_*`         | commun      |
+| `codegen_base.py`   | façade (réexporte les modules ci-dessous)              | commun      |
+| `codegen_hub.py`    | `Gen` / `Pp` + dispatch assembleur                     | commun      |
+| `codegen_lang.py`   | entiers, opérateurs, if/while/print, argv              | commun      |
+| `codegen_analyse.py`| `build_symbols` (pré-passe symtab)                     | commun      |
+| `codegen_debug.py`  | pretty-print `pp_*` (`--pp`)                           | commun      |
+| `codegen_ast.py`    | helpers lecture AST                                    | commun      |
 | `codegen_func.py`   | fonctions (pile, appels, return)                       | Dev A       |
 | `codegen_dict.py`   | dictionnaires (balayage linéaire)                      | Dev B       |
 | `codegen_array.py`  | tableaux 1D                                            | Dev C       |

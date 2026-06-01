@@ -61,15 +61,15 @@ def pp_fonction(ast: Tree, pp: object) -> str:
     idx: int = 1
     if len(ast.children) > 1 and isinstance(ast.children[1], Tree):
         if ast.children[1].data == "liste_params":
-            from codegen_base import pp_liste_params
+            from codegen_ast import pp_liste_params
 
             params = pp_liste_params(ast.children[1])
             idx = 2
     body: Tree = _tree(ast.children[idx])
     ret: str = pp.expr(_tree(ast.children[idx + 1]))  # type: ignore[attr-defined]
-    from codegen_base import _indent_block
+    from codegen_ast import indent_block
 
-    body_s: str = _indent_block(pp.cmd(body))  # type: ignore[attr-defined]
+    body_s: str = indent_block(pp.cmd(body))  # type: ignore[attr-defined]
     return f"function {name}({params}) {{\n{body_s}\n    return {ret};\n}}"
 
 

@@ -117,11 +117,11 @@ def pp_programme(ast: Tree) -> str:
     vs: str = pp_liste_vars(main.children[0])
     body: str = pp_commande(main.children[1], pp)
     ret: str = pp_expression(main.children[2], pp)
-    from codegen_base import _indent_block
+    from codegen_ast import indent_block
 
     main_s: str = (
         f"main({vs}) {{\n"
-        f"{_indent_block(body)}\n"
+        f"{indent_block(body)}\n"
         f"    return {ret};\n"
         f"}}"
     )

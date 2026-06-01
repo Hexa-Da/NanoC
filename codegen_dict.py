@@ -143,9 +143,9 @@ def pp_for_in(ast: Tree, pp: object) -> str:
     k_name: str = _ident(ast.children[0])
     d_name: str = _ident(ast.children[1])
     body: str = pp.cmd(_tree(ast.children[2]))  # type: ignore[attr-defined]
-    from codegen_base import _indent_block
+    from codegen_ast import indent_block
 
-    return f"for ({k_name} in {d_name}) {{\n{_indent_block(body)}\n}}"
+    return f"for ({k_name} in {d_name}) {{\n{indent_block(body)}\n}}"
 
 
 def asm_for_in(ast: Tree, scope: object, gen: object) -> str:
