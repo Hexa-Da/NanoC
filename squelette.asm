@@ -1,16 +1,21 @@
 extern printf, atoi
+global main
+
 section .data
 argv: dq 0
-format: db "%lld\n", 0
+format: db "%lld", 10, 0
 DECL_VARS
-global main
+
 section .text
 main:
 push rbp
 mov rbp, rsp
 mov [argv], rsi
 INIT_VARS
-COMMAND 
+COMMAND
 RETURN
+mov rsp, rbp
 pop rbp
 ret
+
+FUNCTION_DEFS
