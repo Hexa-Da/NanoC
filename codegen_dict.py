@@ -145,11 +145,56 @@ def asm_set(ast: Tree, scope: object, gen: object) -> str:
 
 
 def asm_get(ast: Tree, scope: object, gen: object) -> str:
-    """`d[k]` : met la valeur associée dans rax (0 si clé absente).
+    """`d[k]` : met la valeur associée dans rax (0 si clé absente)"""
+    name: str = _ident(ast.children[0])
+    key_ast: Tree = _tree(ast.children[1])
+    
+    st: object = gen.symtab 
+    dk: str = st.dk(name)
+    dv: str = st.dv(name)
+    du: str = st.du(name)
+    dcount: str = st.dcount(name)
+    
+    lab: str = gen.new_label("dict_get")
 
-    AST : ast.children = [Token(nom), expression_clé].
-    """
-    raise NotImplementedError("Dev B : à implémenter — lecture d[k]")
+    # Préconditions :
+    # - key_ast évalue un entier en rax via gen.expr(...)
+    #
+    # Invariant de boucle :
+    # - pour tout j dans [0, rdx), aucune entrée occupée ne porte la clé cible
+    # - rcx = dcount reste constant pendant le scan
+
+    code: str = ""
+    code += gen.expr(key_ast, scope)   # rax = key
+    code += "mov rbx, rax\n"           # rbx = key
+    code += f"mov rcx, [{dcount}]\n"   # rcx = dcount
+    code += "xor rdx, rdx\n"           # rdx = i = 0
+
+    # Boucle de scan :
+    code += f"{lab}_scan:\n"
+    code += "cmp rdx, rcx\n"
+    code += f"jge {lab}_not_found\n"
+
+    code += f"cmp qword [{du} + rdx*8], 0\n"
+    code += f"je {lab}_next\n"
+
+    code += f"cmp qword [{dk} + rdx*8], rbx\n"
+    code += f"jne {lab}_next\n"
+
+    # clé trouvée -> met la valeur dans rax
+    code += f"mov rax, qword [{dv} + rdx*8]\n"
+    code += f"jmp {lab}_end\n"
+
+    code += f"{lab}_next:\n"
+    code += "inc rdx\n"
+    code += f"jmp {lab}_scan\n"
+
+    # clé absente -> met 0 dans rax
+    code += f"{lab}_not_found:\n"
+    code += "xor rax, rax\n"
+
+    code += f"{lab}_end:\n"
+    return code
 
 
 def asm_len(name: str, gen: object) -> str:
