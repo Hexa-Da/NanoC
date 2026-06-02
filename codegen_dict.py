@@ -39,27 +39,26 @@ from lark import Token, Tree
 
 
 def asm_new(name: str, gen: object) -> str:
-    """`d = dict();` : vide le dictionnaire.
+    """`d = dict();` : vide le dictionnaire."""
+    st: SymbolTable = gen.symtab  # type: ignore[attr-defined]
+    du: str = st.du(name)
+    dcount: str = st.dcount(name)
+    dsize: str = st.dsize(name)
+    cap: int = st.CAP
+    lab: str = gen.new_label("dict_new")
 
-    Labels : gen.symtab.dcount(name), gen.symtab.dsize(name), gen.symtab.du(name).
-    À faire :
-      1. `mov qword [dcount_d], 0`
-      2. `mov qword [dsize_d], 0`
-      3. mettre tous les du_d[i]=0 pour i dans [0, CAP) via une boucle :
-           lab = gen.new_label("new")
-           `xor rax, rax`             ; compteur i = 0
-           `{lab}_loop:`
-           `cmp rax, {gen.symtab.CAP}`
-           `jge {lab}_end`
-           `mov qword [du_d + rax*8], 0`
-           `inc rax`
-           `jmp {lab}_loop`
-           `{lab}_end:`
-    Note : remettre uniquement dcount et dsize à 0 suffirait aussi (la recherche
-    se fait toujours dans [0, dcount)), mais zeroing du est plus sûr si tu
-    réutilises le dictionnaire plusieurs fois de suite.
-    """
-    raise NotImplementedError("Dev B : à implémenter — dict() (vidage)")
+    return (
+        f"mov qword [{dcount}], 0\n"
+        f"mov qword [{dsize}], 0\n"
+        f"xor rax, rax\n"
+        f"{lab}_loop:\n"
+        f"cmp rax, {cap}\n"
+        f"jge {lab}_end\n"
+        f"mov qword [{du} + rax*8], 0\n"
+        f"inc rax\n"
+        f"jmp {lab}_loop\n"
+        f"{lab}_end:\n"
+    )
 
 
 def asm_literal(name: str, rhs: Tree, scope: object, gen: object) -> str:
