@@ -62,21 +62,86 @@ def asm_new(name: str, gen: object) -> str:
 
 
 def asm_literal(name: str, rhs: Tree, scope: object, gen: object) -> str:
-    """`d = {k1:v1, ...};` : vide puis insère chaque paire.
+    """`d = {k1:v1, ...};` : vide puis insère chaque paire."""
+    paires: Tree = _tree(rhs.children[0])
+    code: str = asm_new(name, gen)
 
-    AST : rhs.data == "dict_literal" ; rhs.children[0].data == "paires" ;
-    chaque `paire` a children = [expression_clé, expression_valeur].
-    Astuce : réutilise la logique de vidage (asm_new) puis d'insertion (asm_set).
-    """
-    raise NotImplementedError("Dev B : à implémenter — littéral {k:v, ...}")
+    for paire in paires.children:
+        paire_t: Tree = _tree(paire)
+        key_expr: Tree = _tree(paire_t.children[0])
+        val_expr: Tree = _tree(paire_t.children[1])
+
+        set_ast: Tree = Tree("assignation_index", [Token("IDENTIFIER", name), key_expr, val_expr])
+        code += asm_set(set_ast, scope, gen)
+
+    return code
 
 
 def asm_set(ast: Tree, scope: object, gen: object) -> str:
-    """`d[k] = v;` : insère ou met à jour (balayage linéaire).
+    """`d[k] = v;` : insère ou met à jour (balayage linéaire)."""
+    name: str = _ident(ast.children[0])
+    key_ast: Tree = _tree(ast.children[1])
+    val_ast: Tree = _tree(ast.children[2])
+    
+    st: object = gen.symtab 
+    dk: str = st.dk(name)
+    dv: str = st.dv(name)
+    du: str = st.du(name)
+    dcount: str = st.dcount(name)
+    dsize: str = st.dsize(name)
+    cap: int = st.CAP
 
-    AST : ast.children = [Token(nom), expression_clé, expression_valeur].
-    """
-    raise NotImplementedError("Dev B : à implémenter — d[k] = v")
+    lab: str = gen.new_label("dict_set")
+
+    # Préconditions :
+    # - key_ast et val_ast évaluent un entier en rax via gen.expr(...)
+    # - dcount est dans [0, CAP]
+    #
+    # Invariant de boucle :
+    # - pour tout j dans [0, rdx), aucune entrée occupée ne porte la clé cible
+    # - rcx = dcount reste constant pendant le scan
+
+    code: str = ""
+    code += gen.expr(val_ast, scope)   # rax = value
+    code += "push rax\n"               # push value
+    code += gen.expr(key_ast, scope)   # rax = key
+    code += "pop rbx\n"                # rbx = value, rax = key
+    code += f"mov rcx, [{dcount}]\n"   # rcx = dcount
+    code += "xor rdx, rdx\n"           # rdx = i = 0
+
+    # Boucle de scan :
+    code += f"{lab}_scan:\n"
+    code += "cmp rdx, rcx\n"
+    code += f"jge {lab}_not_found\n"
+
+    code += f"cmp qword [{du} + rdx*8], 0\n"
+    code += f"je {lab}_next\n"
+
+    code += f"cmp qword [{dk} + rdx*8], rax\n"
+    code += f"jne {lab}_next\n"
+
+    # clé trouvée -> update valeur
+    code += f"mov qword [{dv} + rdx*8], rbx\n"
+    code += f"jmp {lab}_end\n"
+
+    code += f"{lab}_next:\n"
+    code += "inc rdx\n"
+    code += f"jmp {lab}_scan\n"
+
+    # clé absente -> insertion au slot dcount
+    code += f"{lab}_not_found:\n"
+    code += f"cmp rcx, {cap}\n"
+    code += f"jge {lab}_end\n"  # dict plein : on ignore en v1
+
+    code += f"mov qword [{dk} + rcx*8], rax\n"
+    code += f"mov qword [{dv} + rcx*8], rbx\n"
+    code += f"mov qword [{du} + rcx*8], 1\n"
+    code += "inc rcx\n"
+    code += f"mov qword [{dcount}], rcx\n"
+    code += f"add qword [{dsize}], 1\n"
+
+    code += f"{lab}_end:\n"
+    return code
 
 
 def asm_get(ast: Tree, scope: object, gen: object) -> str:
