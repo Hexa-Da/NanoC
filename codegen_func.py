@@ -40,8 +40,12 @@ from symboltable import ARG_REGS, MAX_ARGS, FuncInfo
 def asm_fonction(info: FuncInfo, gen: object) -> str:
     """ Génère le corps assembleur d'une fonction. """
     
+
     func_nom = gen.symtab.func_label(info.name)
     asm_code = f"{func_nom}:\n"
+
+    if len(info.params) > MAX_ARGS:
+        raise ErreurCompilation(f"Trop d'arguments pour : {info.name}.")
 
     ### PROLOGUE ### 
     # On sauvegarde la base + actualisation sommet
@@ -84,7 +88,12 @@ def asm_appel(ast: Tree, scope: object, gen: object) -> str:
     """
 
     nom = _ident(ast.children[0])
-    info = gen.symtab.lookup_function(nom)
+    
+    # Sécurité d'existence de la fonction appelée
+    try:
+        info = gen.symtab.lookup_function(nom)
+    except NameError:
+        raise ErreurCompilation(f"La fonction : {nom} n'est pas définie.")
 
     # On construit liste arguments + test validité
     if len(ast.children) == 1:
