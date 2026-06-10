@@ -2,9 +2,10 @@ main() {
     d = dict();
     d[1] = 100;
     d[2] = 200;
-    print(len(d));
-    del d[1];
-    print(len(d));
-    print(d[1]);
+    s = 0;
+    for (k in d) {
+        s = s + d[k];
+    }
+    print(s);  
     return 0;
 }

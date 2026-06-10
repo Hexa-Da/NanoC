@@ -40,7 +40,7 @@ from lark import Token, Tree
 
 def asm_new(name: str, gen: object) -> str:
     """`d = dict();` : vide le dictionnaire."""
-    st: SymbolTable = gen.symtab  # type: ignore[attr-defined]
+    st: object = gen.symtab
     du: str = st.du(name)
     dcount: str = st.dcount(name)
     dsize: str = st.dsize(name)
@@ -82,8 +82,8 @@ def asm_set(ast: Tree, scope: object, gen: object) -> str:
     name: str = _ident(ast.children[0])
     key_ast: Tree = _tree(ast.children[1])
     val_ast: Tree = _tree(ast.children[2])
-    
-    st: object = gen.symtab 
+
+    st: object = gen.symtab
     dk: str = st.dk(name)
     dv: str = st.dv(name)
     du: str = st.du(name)
@@ -148,13 +148,13 @@ def asm_get(ast: Tree, scope: object, gen: object) -> str:
     """`d[k]` : met la valeur associée dans rax (0 si clé absente)"""
     name: str = _ident(ast.children[0])
     key_ast: Tree = _tree(ast.children[1])
-    
-    st: object = gen.symtab 
+
+    st: object = gen.symtab
     dk: str = st.dk(name)
     dv: str = st.dv(name)
     du: str = st.du(name)
     dcount: str = st.dcount(name)
-    
+
     lab: str = gen.new_label("dict_get")
 
     # Préconditions :
@@ -208,13 +208,13 @@ def asm_del(ast: Tree, scope: object, gen: object) -> str:
     """`del d[k];` : libère le slot de la clé et décrémente dsize (rien si absent)."""
     name: str = _ident(ast.children[0])
     key_ast: Tree = _tree(ast.children[1])
-    
-    st: object = gen.symtab 
+
+    st: object = gen.symtab
     dk: str = st.dk(name)
     du: str = st.du(name)
     dcount: str = st.dcount(name)
     dsize: str = st.dsize(name)
-    
+
     lab: str = gen.new_label("dict_del")
 
     # On reprend asm_get mais sans la partie "charger la valeur dans rax"
@@ -244,7 +244,7 @@ def asm_del(ast: Tree, scope: object, gen: object) -> str:
     code += f"cmp qword [{dk} + rdx*8], rbx\n"
     code += f"jne {lab}_next\n"
 
-    # clé trouvée : libère le slot et décrémente dsize
+    # clé trouvée -> libère le slot et décrémente dsize
     code += f"mov qword [{du} + rdx*8], 0\n"
     code += f"dec qword [{dsize}]\n"
     code += f"jmp {lab}_end\n"
@@ -253,8 +253,60 @@ def asm_del(ast: Tree, scope: object, gen: object) -> str:
     code += "inc rdx\n"
     code += f"jmp {lab}_scan\n"
 
-    # not_found : on ne fait rien
+    # clé absente -> rien (pas d'erreur en v1)
     code += f"{lab}_not_found:\n"
+    code += f"{lab}_end:\n"
+    return code
+
+
+def asm_for_in(ast: Tree, scope: object, gen: object) -> str:
+    """`for (k in d) { ... }` : itère sur les clés des slots occupés."""
+    k_name: str = _ident(ast.children[0])
+    d_name: str = _ident(ast.children[1])
+    bloc: Tree = _tree(ast.children[2])
+
+    st: object = gen.symtab
+    dk: str = st.dk(d_name)
+    du: str = st.du(d_name)
+    dcount: str = st.dcount(d_name)
+    gv_k: str = st.gv(k_name)
+
+    lab: str = gen.new_label("dict_for")
+
+    # Préconditions :
+    # - scope is None (v1) : for (k in d) n'existe que dans le main
+    #
+    # Invariant de boucle :
+    # - rdx = i parcourt [0, rcx) ; rcx = dcount figé au début de la boucle
+    # - pour tout j dans [0, rdx), le corps a été exécuté si du[j]==1
+
+    code: str = ""
+    code += f"mov rcx, [{dcount}]\n"   # rcx = dcount (limite figée)
+    code += "xor rdx, rdx\n"           # rdx = i = 0
+
+    # Boucle de balayage :
+    code += f"{lab}_loop:\n"
+    code += "cmp rdx, rcx\n"
+    code += f"jge {lab}_end\n"
+
+    code += f"cmp qword [{du} + rdx*8], 0\n"
+    code += f"je {lab}_next\n"
+
+    # slot occupé -> k = clé
+    code += f"mov rax, qword [{dk} + rdx*8]\n"
+    code += f"mov qword [{gv_k}], rax\n"
+
+    # protéger i et limite (le corps peut écraser rdx/rcx)
+    code += "push rdx\n"
+    code += "push rcx\n"
+    code += gen.cmd(bloc, scope)
+    code += "pop rcx\n"
+    code += "pop rdx\n"
+
+    code += f"{lab}_next:\n"
+    code += "inc rdx\n"
+    code += f"jmp {lab}_loop\n"
+
     code += f"{lab}_end:\n"
     return code
 
@@ -275,8 +327,8 @@ def pp_literal_expr(rhs: Tree, pp: object) -> str:
     parts: list[str] = []
     for paire in paires.children:
         paire_t: Tree = _tree(paire)
-        key: str = pp.expr(_tree(paire_t.children[0]))  # type: ignore[attr-defined]
-        val: str = pp.expr(_tree(paire_t.children[1]))  # type: ignore[attr-defined]
+        key: str = pp.expr(_tree(paire_t.children[0]))
+        val: str = pp.expr(_tree(paire_t.children[1]))
         parts.append(f"{key}:{val}")
     return "{" + ", ".join(parts) + "}"
 
@@ -284,15 +336,15 @@ def pp_literal_expr(rhs: Tree, pp: object) -> str:
 def pp_set(ast: Tree, pp: object) -> str:
     """`d[k] = v;`"""
     name: str = _ident(ast.children[0])
-    key: str = pp.expr(_tree(ast.children[1]))  # type: ignore[attr-defined]
-    val: str = pp.expr(_tree(ast.children[2]))  # type: ignore[attr-defined]
+    key: str = pp.expr(_tree(ast.children[1]))
+    val: str = pp.expr(_tree(ast.children[2]))
     return f"{name}[{key}] = {val};"
 
 
 def pp_get(ast: Tree, pp: object) -> str:
     """`d[k]` (expression)."""
     name: str = _ident(ast.children[0])
-    key: str = pp.expr(_tree(ast.children[1]))  # type: ignore[attr-defined]
+    key: str = pp.expr(_tree(ast.children[1]))
     return f"{name}[{key}]"
 
 
@@ -304,7 +356,7 @@ def pp_len(name: str, pp: object) -> str:
 def pp_del(ast: Tree, pp: object) -> str:
     """`del d[k];`"""
     name: str = _ident(ast.children[0])
-    key: str = pp.expr(_tree(ast.children[1]))  # type: ignore[attr-defined]
+    key: str = pp.expr(_tree(ast.children[1]))
     return f"del {name}[{key}];"
 
 
@@ -312,23 +364,11 @@ def pp_for_in(ast: Tree, pp: object) -> str:
     """`for (k in d) { ... }`"""
     k_name: str = _ident(ast.children[0])
     d_name: str = _ident(ast.children[1])
-    body: str = pp.cmd(_tree(ast.children[2]))  # type: ignore[attr-defined]
+    body: str = pp.cmd(_tree(ast.children[2]))
     from codegen_ast import indent_block
 
     return f"for ({k_name} in {d_name}) {{\n{indent_block(body)}\n}}"
 
-
-def asm_for_in(ast: Tree, scope: object, gen: object) -> str:
-    """`for (k in d) { ... }` : itère sur les clés des slots occupés.
-
-    AST : ast.children = [Token(var_boucle), Token(nom_dict), bloc].
-    À faire : balayer [0, dcount), pour chaque du==1 mettre la clé dans la
-    variable de boucle (globale : st.gv(var)), puis générer le corps avec
-    gen.cmd(bloc, scope). Protège ton compteur autour du corps (push/pop) et
-    garde l'alignement de pile (voir CONSEILS PILE ci-dessus).
-    Précondition v1 : scope is None (variable de boucle = globale du main).
-    """
-    raise NotImplementedError("Dev B : à implémenter — for (k in d)")
 
 
 # ── helpers de lecture d'AST (réutilisables) ──────────────────────────────
