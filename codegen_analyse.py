@@ -11,7 +11,7 @@ from __future__ import annotations
 from lark import Tree
 
 from codegen_ast import ident, tree
-from symboltable import FuncInfo, SymbolTable
+from symboltable import MAX_ARGS, FuncInfo, SymbolTable
 
 
 class ErreurCompilation(Exception):
@@ -39,6 +39,10 @@ def _register_function(f: Tree, symtab: SymbolTable) -> None:
     if isinstance(ch[1], Tree) and ch[1].data == "liste_params":
         params = [ident(t) for t in ch[1].children]
         idx = 2
+    if len(params) > MAX_ARGS:
+        raise ErreurCompilation(
+            f"fonction '{name}' : trop de paramètres ({len(params)} > {MAX_ARGS})"
+        )
     body: Tree = tree(ch[idx])
     ret: Tree = tree(ch[idx + 1])
     locals_list: list[str] = list(params)

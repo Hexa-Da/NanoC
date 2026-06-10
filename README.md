@@ -74,3 +74,7 @@ Hors périmètre v1 : multi-dimensions, chaînes, `else`, macOS/Windows.
 
 La génération de `resultat.asm` (Python) et l'assemblage `nasm -f elf64` sont
 indépendants de l'OS hôte. L'**exécution** nécessite Linux x86_64 (binaire ELF).
+
+Lors de l'assemblage, NASM peut afficher un avertissement du type
+`implicit DEFAULT ABS is deprecated` sur la ligne `main:` du squelette.
+C'est bénin avec `-no-pie` et n'empêche pas la génération du binaire.

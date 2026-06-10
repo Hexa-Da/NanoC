@@ -45,7 +45,10 @@ def asm_fonction(info: FuncInfo, gen: object) -> str:
     asm_code = f"{func_nom}:\n"
 
     if len(info.params) > MAX_ARGS:
-        raise ErreurCompilation(f"Trop d'arguments pour : {info.name}.")
+        raise ErreurCompilation(
+            f"fonction '{info.name}' : trop de paramètres "
+            f"({len(info.params)} > {MAX_ARGS})"
+        )
 
     ### PROLOGUE ### 
     # On sauvegarde la base + actualisation sommet
@@ -104,7 +107,9 @@ def asm_appel(ast: Tree, scope: object, gen: object) -> str:
     if len(args) != len(info.params):
         raise ErreurCompilation(f"Mauvais nombre d'arguments pour : {nom}.")
     if len(args) > MAX_ARGS:
-        raise ErreurCompilation(f"Trop d'arguments pour : {nom}.")
+        raise ErreurCompilation(
+            f"fonction '{nom}' : trop de paramètres ({len(args)} > {MAX_ARGS})"
+        )
 
     # Vérification de type sur chaque argument
     # Chaque expression passée en arg doit être un entier.
