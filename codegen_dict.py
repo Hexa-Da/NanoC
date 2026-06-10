@@ -40,7 +40,7 @@ from lark import Token, Tree
 
 def asm_new(name: str, gen: object) -> str:
     """`d = dict();` : vide le dictionnaire."""
-    st: SymbolTable = gen.symtab
+    st: object = gen.symtab
     du: str = st.du(name)
     dcount: str = st.dcount(name)
     dsize: str = st.dsize(name)
@@ -82,8 +82,8 @@ def asm_set(ast: Tree, scope: object, gen: object) -> str:
     name: str = _ident(ast.children[0])
     key_ast: Tree = _tree(ast.children[1])
     val_ast: Tree = _tree(ast.children[2])
-    
-    st: object = gen.symtab 
+
+    st: object = gen.symtab
     dk: str = st.dk(name)
     dv: str = st.dv(name)
     du: str = st.du(name)
@@ -148,13 +148,13 @@ def asm_get(ast: Tree, scope: object, gen: object) -> str:
     """`d[k]` : met la valeur associée dans rax (0 si clé absente)"""
     name: str = _ident(ast.children[0])
     key_ast: Tree = _tree(ast.children[1])
-    
-    st: object = gen.symtab 
+
+    st: object = gen.symtab
     dk: str = st.dk(name)
     dv: str = st.dv(name)
     du: str = st.du(name)
     dcount: str = st.dcount(name)
-    
+
     lab: str = gen.new_label("dict_get")
 
     # Préconditions :
@@ -208,13 +208,13 @@ def asm_del(ast: Tree, scope: object, gen: object) -> str:
     """`del d[k];` : libère le slot de la clé et décrémente dsize (rien si absent)."""
     name: str = _ident(ast.children[0])
     key_ast: Tree = _tree(ast.children[1])
-    
-    st: object = gen.symtab 
+
+    st: object = gen.symtab
     dk: str = st.dk(name)
     du: str = st.du(name)
     dcount: str = st.dcount(name)
     dsize: str = st.dsize(name)
-    
+
     lab: str = gen.new_label("dict_del")
 
     # On reprend asm_get mais sans la partie "charger la valeur dans rax"
@@ -244,7 +244,7 @@ def asm_del(ast: Tree, scope: object, gen: object) -> str:
     code += f"cmp qword [{dk} + rdx*8], rbx\n"
     code += f"jne {lab}_next\n"
 
-    # clé trouvée : libère le slot et décrémente dsize
+    # clé trouvée -> libère le slot et décrémente dsize
     code += f"mov qword [{du} + rdx*8], 0\n"
     code += f"dec qword [{dsize}]\n"
     code += f"jmp {lab}_end\n"
@@ -253,69 +253,10 @@ def asm_del(ast: Tree, scope: object, gen: object) -> str:
     code += "inc rdx\n"
     code += f"jmp {lab}_scan\n"
 
-    # not_found : on ne fait rien
+    # clé absente -> rien (pas d'erreur en v1)
     code += f"{lab}_not_found:\n"
     code += f"{lab}_end:\n"
     return code
-
-
-def pp_new(name: str, pp: object) -> str:
-    """`d = dict();`"""
-    return f"{name} = dict();"
-
-
-def pp_assign_literal(name: str, rhs: Tree, pp: object) -> str:
-    """`d = {k:v, ...};` (commande)."""
-    return f"{name} = {pp_literal_expr(rhs, pp)};"
-
-
-def pp_literal_expr(rhs: Tree, pp: object) -> str:
-    """`{k1:v1, k2:v2}` (expression)."""
-    paires: Tree = _tree(rhs.children[0])
-    parts: list[str] = []
-    for paire in paires.children:
-        paire_t: Tree = _tree(paire)
-        key: str = pp.expr(_tree(paire_t.children[0]))  
-        val: str = pp.expr(_tree(paire_t.children[1]))  
-        parts.append(f"{key}:{val}")
-    return "{" + ", ".join(parts) + "}"
-
-
-def pp_set(ast: Tree, pp: object) -> str:
-    """`d[k] = v;`"""
-    name: str = _ident(ast.children[0])
-    key: str = pp.expr(_tree(ast.children[1]))  
-    val: str = pp.expr(_tree(ast.children[2]))  
-    return f"{name}[{key}] = {val};"
-
-
-def pp_get(ast: Tree, pp: object) -> str:
-    """`d[k]` (expression)."""
-    name: str = _ident(ast.children[0])
-    key: str = pp.expr(_tree(ast.children[1]))  
-    return f"{name}[{key}]"
-
-
-def pp_len(name: str, pp: object) -> str:
-    """`len(d)`"""
-    return f"len({name})"
-
-
-def pp_del(ast: Tree, pp: object) -> str:
-    """`del d[k];`"""
-    name: str = _ident(ast.children[0])
-    key: str = pp.expr(_tree(ast.children[1]))  
-    return f"del {name}[{key}];"
-
-
-def pp_for_in(ast: Tree, pp: object) -> str:
-    """`for (k in d) { ... }`"""
-    k_name: str = _ident(ast.children[0])
-    d_name: str = _ident(ast.children[1])
-    body: str = pp.cmd(_tree(ast.children[2]))  
-    from codegen_ast import indent_block
-
-    return f"for ({k_name} in {d_name}) {{\n{indent_block(body)}\n}}"
 
 
 def asm_for_in(ast: Tree, scope: object, gen: object) -> str:
@@ -340,9 +281,10 @@ def asm_for_in(ast: Tree, scope: object, gen: object) -> str:
     # - pour tout j dans [0, rdx), le corps a été exécuté si du[j]==1
 
     code: str = ""
-    code += f"mov rcx, [{dcount}]\n"   # limite
-    code += "xor rdx, rdx\n"           # i = 0
+    code += f"mov rcx, [{dcount}]\n"   # rcx = dcount (limite figée)
+    code += "xor rdx, rdx\n"           # rdx = i = 0
 
+    # Boucle de balayage :
     code += f"{lab}_loop:\n"
     code += "cmp rdx, rcx\n"
     code += f"jge {lab}_end\n"
@@ -367,6 +309,67 @@ def asm_for_in(ast: Tree, scope: object, gen: object) -> str:
 
     code += f"{lab}_end:\n"
     return code
+
+
+def pp_new(name: str, pp: object) -> str:
+    """`d = dict();`"""
+    return f"{name} = dict();"
+
+
+def pp_assign_literal(name: str, rhs: Tree, pp: object) -> str:
+    """`d = {k:v, ...};` (commande)."""
+    return f"{name} = {pp_literal_expr(rhs, pp)};"
+
+
+def pp_literal_expr(rhs: Tree, pp: object) -> str:
+    """`{k1:v1, k2:v2}` (expression)."""
+    paires: Tree = _tree(rhs.children[0])
+    parts: list[str] = []
+    for paire in paires.children:
+        paire_t: Tree = _tree(paire)
+        key: str = pp.expr(_tree(paire_t.children[0]))
+        val: str = pp.expr(_tree(paire_t.children[1]))
+        parts.append(f"{key}:{val}")
+    return "{" + ", ".join(parts) + "}"
+
+
+def pp_set(ast: Tree, pp: object) -> str:
+    """`d[k] = v;`"""
+    name: str = _ident(ast.children[0])
+    key: str = pp.expr(_tree(ast.children[1]))
+    val: str = pp.expr(_tree(ast.children[2]))
+    return f"{name}[{key}] = {val};"
+
+
+def pp_get(ast: Tree, pp: object) -> str:
+    """`d[k]` (expression)."""
+    name: str = _ident(ast.children[0])
+    key: str = pp.expr(_tree(ast.children[1]))
+    return f"{name}[{key}]"
+
+
+def pp_len(name: str, pp: object) -> str:
+    """`len(d)`"""
+    return f"len({name})"
+
+
+def pp_del(ast: Tree, pp: object) -> str:
+    """`del d[k];`"""
+    name: str = _ident(ast.children[0])
+    key: str = pp.expr(_tree(ast.children[1]))
+    return f"del {name}[{key}];"
+
+
+def pp_for_in(ast: Tree, pp: object) -> str:
+    """`for (k in d) { ... }`"""
+    k_name: str = _ident(ast.children[0])
+    d_name: str = _ident(ast.children[1])
+    body: str = pp.cmd(_tree(ast.children[2]))
+    from codegen_ast import indent_block
+
+    return f"for ({k_name} in {d_name}) {{\n{indent_block(body)}\n}}"
+
+
 
 # ── helpers de lecture d'AST (réutilisables) ──────────────────────────────
 
