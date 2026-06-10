@@ -198,18 +198,65 @@ def asm_get(ast: Tree, scope: object, gen: object) -> str:
 
 
 def asm_len(name: str, gen: object) -> str:
-    """`len(d)` : nombre d'entiers vivants (rax <- dsize_d)."""
+    """`len(d)` : nombre d'entrées vivantes (rax <- dsize_d)."""
     st: object = gen.symtab
     dsize: str = st.dsize(name)
     return f"mov rax, qword [{dsize}]\n"
 
 
 def asm_del(ast: Tree, scope: object, gen: object) -> str:
-    """`del d[k];` : libère le slot de la clé et décrémente dsize (rien si absent).
+    """`del d[k];` : libère le slot de la clé et décrémente dsize (rien si absent)."""
+    name: str = _ident(ast.children[0])
+    key_ast: Tree = _tree(ast.children[1])
+    
+    st: object = gen.symtab 
+    dk: str = st.dk(name)
+    du: str = st.du(name)
+    dcount: str = st.dcount(name)
+    dsize: str = st.dsize(name)
+    
+    lab: str = gen.new_label("dict_del")
 
-    AST : ast.children = [Token(nom), expression_clé].
-    """
-    raise NotImplementedError("Dev B : à implémenter — del d[k]")
+    # On reprend asm_get mais sans la partie "charger la valeur dans rax"
+    # le balayage se fait de la même façon (linéaire sur [0, dcount))
+
+    # Préconditions :
+    # - key_ast évalue un entier en rax via gen.expr(...)
+    #
+    # Invariant de boucle :
+    # - pour tout j dans [0, rdx), aucune entrée occupée ne porte la clé cible
+    # - rcx = dcount reste constant pendant le scan
+
+    code: str = ""
+    code += gen.expr(key_ast, scope)   # rax = key
+    code += "mov rbx, rax\n"           # rbx = key
+    code += f"mov rcx, [{dcount}]\n"   # rcx = dcount
+    code += "xor rdx, rdx\n"           # rdx = i = 0
+
+    # Boucle de scan :
+    code += f"{lab}_scan:\n"
+    code += "cmp rdx, rcx\n"
+    code += f"jge {lab}_not_found\n"
+
+    code += f"cmp qword [{du} + rdx*8], 0\n"
+    code += f"je {lab}_next\n"
+
+    code += f"cmp qword [{dk} + rdx*8], rbx\n"
+    code += f"jne {lab}_next\n"
+
+    # clé trouvée : libère le slot et décrémente dsize
+    code += f"mov qword [{du} + rdx*8], 0\n"
+    code += f"dec qword [{dsize}]\n"
+    code += f"jmp {lab}_end\n"
+
+    code += f"{lab}_next:\n"
+    code += "inc rdx\n"
+    code += f"jmp {lab}_scan\n"
+
+    # not_found : on ne fait rien
+    code += f"{lab}_not_found:\n"
+    code += f"{lab}_end:\n"
+    return code
 
 
 def pp_new(name: str, pp: object) -> str:
