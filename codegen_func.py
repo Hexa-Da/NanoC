@@ -29,9 +29,9 @@ INTERDICTION : ne PAS importer codegen_array / codegen_dict / codegen_base.
 
 from __future__ import annotations
 
-from lark import Token, Tree
-
-from codegen_analyse import ErreurCompilation
+from lark import Tree
+from codegen_ast import ident, tree
+from codegen_analyse import ErreurCompilation, checktype
 from symboltable import ARG_REGS, MAX_ARGS, FuncInfo
 
 
@@ -87,7 +87,7 @@ def asm_appel(ast: Tree, scope: object, gen: object) -> str:
     On effectue aussi des vérifications de nombre d'arguments.
     """
 
-    nom = _ident(ast.children[0])
+    nom = ident(ast.children[0])
     
     # Sécurité d'existence de la fonction appelée
     try:
@@ -99,29 +99,46 @@ def asm_appel(ast: Tree, scope: object, gen: object) -> str:
     if len(ast.children) == 1:
         args = []
     else:
-        args = _tree(ast.children[1]).children
+        args = tree(ast.children[1]).children
     
     if len(args) != len(info.params):
         raise ErreurCompilation(f"Mauvais nombre d'arguments pour : {nom}.")
     if len(args) > MAX_ARGS:
         raise ErreurCompilation(f"Trop d'arguments pour : {nom}.")
 
-    # On évalue chaque argument (dans rax) puis on le stocke sur la pile
+    # Vérification de type sur chaque argument
+    # Chaque expression passée en arg doit être un entier.
+    for idx, arg in enumerate(args):
+        checktype(tree(arg), scope, gen.symtab, "int", f"argument {idx + 1} de l'appel à '{nom}'")
+
     asm_code = ""
 
-    for idx in range(len(args)): 
+    # Alignement : juste avant un call, rsp doit être multiple de 16.
+    # rsp est déjà décalé de 8 (push rbp du prologue) : un nombre pair de push supplémentaires laisse ce décalage intact.    
+    # Donc on doit compenser avec un sub rsp, 8.
+    n = len(args)
+    if (n % 2 == 0):
+        asm_code += "sub rsp, 8\n"
+
+    # On évalue chaque argument (dans rax) puis on le stocke sur la pile
+
+    for idx in range(n): 
         asm_code += gen.expr(args[idx], scope)
         asm_code += "push rax\n"
 
     # On dépile les arguments dans les registres (ordre inverse)
     # De cette façon on écrase pas d'éventuels calculs d'args
-    for idx in range(len(args) - 1, -1, -1):
+    for idx in range(n-1, -1, -1):
         registre = ARG_REGS[idx]
         asm_code += f"pop {registre}\n"
     
     # Appel de la fonction
     func_nom = gen.symtab.func_label(nom)
     asm_code += f"call {func_nom}\n"
+
+    # On retire le décalage d'alignement si on en avait ajouté un
+    if (n%2 == 0):
+        asm_code += "add rsp, 8\n"
     
     return asm_code
 
@@ -135,7 +152,7 @@ def pp_fonction(ast: Tree, pp: object) -> str:
     # On évite l'import circulaire ici 
     from codegen_ast import pp_liste_params, indent_block
 
-    nom = _ident(ast.children[0])
+    nom = ident(ast.children[0])
     idx = 1
 
     ### PARAMETRES ###
@@ -148,13 +165,13 @@ def pp_fonction(ast: Tree, pp: object) -> str:
             idx = 2
     
     ### CORPS ###
-    corps_ast = _tree(ast.children[idx])
+    corps_ast = tree(ast.children[idx])
     
     # On ajoute direct l'indentation
     corps = indent_block(pp.cmd(corps_ast)) 
 
     ### RETOUR ###
-    ret = pp.expr(_tree(ast.children[idx + 1]))  
+    ret = pp.expr(tree(ast.children[idx + 1]))  
 
     ### CHAINE COMPLETE ###
     return f"function {nom}({parametres}) {{\n{corps}\n    return {ret};\n}}"
@@ -163,30 +180,19 @@ def pp_fonction(ast: Tree, pp: object) -> str:
 def pp_appel(ast: Tree, pp: object) -> str:
     """ Pretty-print un appel de fonction. """
     
-    nom = _ident(ast.children[0])
+    nom = ident(ast.children[0])
     
     ### ARGUMENTS ###
     # Disjonction de cas (0 ou >0 args)
     if len(ast.children) == 1:
         return f"{nom}()"
     
-    arguments_ast = _tree(ast.children[1])
-    arguments = ", ".join(pp.expr(_tree(c)) for c in arguments_ast.children) 
+    arguments_ast = tree(ast.children[1])
+    arguments = ", ".join(pp.expr(tree(c)) for c in arguments_ast.children) 
     
     ### CHAINE COMPLETE ###
     return f"{nom}({arguments})"
 
 
 
-###### FONCTIONS HELPERS ######
 
-def _ident(node: object) -> str:
-    if not isinstance(node, Token):
-        raise TypeError(f"identifiant attendu, reçu {type(node).__name__}")
-    return node.value
-
-
-def _tree(node: object) -> Tree:
-    if not isinstance(node, Tree):
-        raise TypeError(f"sous-arbre attendu, reçu {type(node).__name__}")
-    return node
