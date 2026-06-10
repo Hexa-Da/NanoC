@@ -198,8 +198,10 @@ def asm_get(ast: Tree, scope: object, gen: object) -> str:
 
 
 def asm_len(name: str, gen: object) -> str:
-    """`len(d)` : nombre d'entrées vivantes (rax <- dsize_d)."""
-    raise NotImplementedError("Dev B : à implémenter — len(d)")
+    """`len(d)` : nombre d'entiers vivants (rax <- dsize_d)."""
+    st: object = gen.symtab
+    dsize: str = st.dsize(name)
+    return f"mov rax, qword [{dsize}]\n"
 
 
 def asm_del(ast: Tree, scope: object, gen: object) -> str:
