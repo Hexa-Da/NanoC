@@ -59,14 +59,16 @@ def _collect_func(node: Tree, locals_list: list[str]) -> None:
     elif data == "assignation":
         rhs: Tree = tree(node.children[1])
         if rhs.data in ("dict_vide", "dict_literal"):
-            raise NotImplementedError("pas de dict dans une fonction (v1)")
+            raise ErreurCompilation(
+                "pas de dict dans une fonction (v1)"
+            )
         name: str = ident(node.children[0])
         if name not in locals_list:
             locals_list.append(name)
     elif data in ("if", "while"):
         _collect_func(tree(node.children[1]), locals_list)
     elif data in ("decl_tableau", "for_in", "del_index", "assignation_index"):
-        raise NotImplementedError(
+        raise ErreurCompilation(
             "tableaux/dicts seulement dans main en v1 (pas dans une fonction)"
         )
 
