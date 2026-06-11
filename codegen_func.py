@@ -13,18 +13,13 @@ MODÈLE PILE (fourni par symboltable.FuncInfo)
   - `info.locals`      : params + variables locales (les params d'abord).
   - `info.frame_size()`: taille à réserver, déjà alignée sur 16.
   - `gen.symtab.func_label(nom)` -> `func_nom` : étiquette de la fonction.
-
-OUTILS FOURNIS via `gen` :
-  - gen.expr(ast, scope) -> str : génère une expression ; RÉSULTAT DANS rax.
-  - gen.cmd(ast, scope)  -> str : génère une commande (le corps).
-  - gen.symtab           : table des symboles (labels, lookup_function...).
-
-CONVENTION : à l'intérieur d'une fonction, `scope` vaut l'objet FuncInfo
-(et non None). Transmets-le tel quel à gen.expr / gen.cmd pour que les
-variables soient résolues sur la pile.
-
-INTERDICTION : ne PAS importer codegen_array / codegen_dict / codegen_base.
 ────────────────────────────────────────────────────────────────────────────
+
+LIMITES UTILISATEUR !! (pour simplifier)
+- on interdit les appels de fonctions imbriqués dans les arguments d'un appel,
+ex : f(g(x), y) est interdit. 
+- maximum 6 arguments (limite des registres d'arguments).
+- arguments de type entier uniquement (qui peuvent représenter des pointeurs vers des dict ou tableaux).
 """
 
 from __future__ import annotations
@@ -88,6 +83,8 @@ def asm_appel(ast: Tree, scope: object, gen: object) -> str:
     """ 
     Evalue un appel de fonction. 
     On effectue aussi des vérifications de nombre d'arguments.
+    # LIMITE : si un argument est lui-même un appel de fonction, par ex f(g(x), y),
+    # le call interne peut rompre l'alignement -> c'est donc interdit.
     """
 
     nom = ident(ast.children[0])
@@ -117,16 +114,9 @@ def asm_appel(ast: Tree, scope: object, gen: object) -> str:
         checktype(tree(arg), scope, gen.symtab, "int", f"argument {idx + 1} de l'appel à '{nom}'")
 
     asm_code = ""
-
-    # Alignement : juste avant un call, rsp doit être multiple de 16.
-    # rsp est déjà décalé de 8 (push rbp du prologue) : un nombre pair de push supplémentaires laisse ce décalage intact.    
-    # Donc on doit compenser avec un sub rsp, 8.
     n = len(args)
-    if (n % 2 == 0):
-        asm_code += "sub rsp, 8\n"
 
     # On évalue chaque argument (dans rax) puis on le stocke sur la pile
-
     for idx in range(n): 
         asm_code += gen.expr(args[idx], scope)
         asm_code += "push rax\n"
@@ -140,10 +130,6 @@ def asm_appel(ast: Tree, scope: object, gen: object) -> str:
     # Appel de la fonction
     func_nom = gen.symtab.func_label(nom)
     asm_code += f"call {func_nom}\n"
-
-    # On retire le décalage d'alignement si on en avait ajouté un
-    if (n%2 == 0):
-        asm_code += "add rsp, 8\n"
     
     return asm_code
 
