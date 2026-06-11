@@ -50,7 +50,13 @@ def asm_decl(ast: Tree, scope: object, gen: object) -> str:
     La zone arr_t est déjà mise à zéro par emit_data (rien à initialiser).
     Précondition v1 : scope is None (tableau = globale du main) et 0 <= E <= CAP.
     """
-    raise NotImplementedError("Dev C : à implémenter — déclaration de tableau")
+    nom: str = _ident(ast.children[0])
+    arr_len: str = gen.symtab.arr_len(nom)
+    # Évalue E : résultat dans rax
+    code: str = gen.expr(_tree(ast.children[1]), scope)
+    # Stocke la longueur réelle dans le label arrlen_<nom>
+    code += f"mov [{arr_len}], rax\n"
+    return code
 
 
 def asm_get(ast: Tree, scope: object, gen: object) -> str:
@@ -64,7 +70,13 @@ def asm_get(ast: Tree, scope: object, gen: object) -> str:
       3. lire l'élément  : `mov rax, [arr_t + rax*8]`
          (rax = indice, *8 car chaque entier fait 8 octets / qword).
     """
-    raise NotImplementedError("Dev C : à implémenter — lecture t[i]")
+    nom: str = _ident(ast.children[0])
+    arr_data: str = gen.symtab.arr_data(nom)
+    # Évalue l'indice : résultat dans rax
+    code: str = gen.expr(_tree(ast.children[1]), scope)
+    # Charge t[rax] : chaque élément est un qword (8 octets)
+    code += f"mov rax, [{arr_data} + rax*8]\n"
+    return code
 
 
 def asm_set(ast: Tree, scope: object, gen: object) -> str:
@@ -79,7 +91,18 @@ def asm_set(ast: Tree, scope: object, gen: object) -> str:
       4. dépiler la valeur  : pop rbx.
       5. écrire             : `mov [arr_t + rax*8], rbx`
     """
-    raise NotImplementedError("Dev C : à implémenter — écriture t[i] = v")
+    nom: str = _ident(ast.children[0])
+    arr_data: str = gen.symtab.arr_data(nom)
+    # Évalue la valeur en premier, la met sur la pile
+    code: str = gen.expr(_tree(ast.children[2]), scope)  # rax = valeur
+    code += "push rax\n"                                  # sauvegarde valeur
+    # Évalue l'indice
+    code += gen.expr(_tree(ast.children[1]), scope)       # rax = indice
+    # Récupère la valeur depuis la pile
+    code += "pop rbx\n"                                   # rbx = valeur
+    # Écrit t[rax] = rbx
+    code += f"mov [{arr_data} + rax*8], rbx\n"
+    return code
 
 
 def asm_len(name: str, gen: object) -> str:
@@ -88,7 +111,8 @@ def asm_len(name: str, gen: object) -> str:
     Labels : gen.symtab.arr_len(name) -> "arrlen_t".
     À faire : `mov rax, [arrlen_t]`
     """
-    raise NotImplementedError("Dev C : à implémenter — len(t)")
+    arr_len: str = gen.symtab.arr_len(name)
+    return f"mov rax, [{arr_len}]\n"
 
 
 # ── pretty-print (texte nanoC lisible, parallèle aux asm_*) ───────────────
