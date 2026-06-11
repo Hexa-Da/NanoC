@@ -57,11 +57,17 @@ function fact(n) {
     if (n > 1) { r = n * fact(n - 1); }
     return r;
 }
+function twice(x) { return x * 2; }
+main() {
+    print(add(twice(2), twice(3)));   /* 10 : appels imbriqués dans les args */
+    return 0;
+}
 ```
 
 - Nombre arbitraire de fonctions, jusqu'à **6 paramètres** (limite ABI v1).
 - Paramètres et retour : **entiers**.
 - Récursivité autorisée (pile).
+- Appels imbriqués dans les arguments autorisés (`f(g(x), y)`).
 - Variables internes : locales à la fonction (sur la pile).
 
 Invalide v1 :

@@ -63,7 +63,8 @@ Tout est statique, en `.data`, capacité fixe `symboltable.py` :
 
 Voir `SYNTAXE.md` pour les exemples détaillés et le périmètre exact.
 
-- Fonctions int→int (jusqu'à 6 paramètres), récursion comprise.
+- Fonctions int→int (jusqu'à 6 paramètres), récursion et appels imbriqués
+  dans les arguments (`f(g(x), y)`).
 - Dictionnaires int→int : `dict()`, `{..}`, `d[k]`, `d[k]=`, `for (k in d)`,
   `del d[k]`, `len(d)`.
 - Tableaux 1D d'entiers : `int t[E];`, `t[i]`, `t[i]=`, `len(t)`.

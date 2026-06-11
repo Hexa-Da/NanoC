@@ -13,13 +13,28 @@ MODÈLE PILE (fourni par symboltable.FuncInfo)
   - `info.locals`      : params + variables locales (les params d'abord).
   - `info.frame_size()`: taille à réserver, déjà alignée sur 16.
   - `gen.symtab.func_label(nom)` -> `func_nom` : étiquette de la fonction.
-────────────────────────────────────────────────────────────────────────────
 
-LIMITES UTILISATEUR !! (pour simplifier)
-- on interdit les appels de fonctions imbriqués dans les arguments d'un appel,
-ex : f(g(x), y) est interdit. 
-- maximum 6 arguments (limite des registres d'arguments).
-- arguments de type entier uniquement (qui peuvent représenter des pointeurs vers des dict ou tableaux).
+OUTILS FOURNIS via `gen` :
+  - gen.expr(ast, scope) -> str : génère une expression ; RÉSULTAT DANS rax.
+  - gen.cmd(ast, scope)  -> str : génère une commande (le corps).
+  - gen.symtab           : table des symboles (labels, lookup_function...).
+
+CONVENTION : à l'intérieur d'une fonction, `scope` vaut l'objet FuncInfo
+(et non None). Transmets-le tel quel à gen.expr / gen.cmd pour que les
+variables soient résolues sur la pile.
+
+APPELS (asm_appel) :
+  - Chaque argument est évalué (gen.expr), poussé sur la pile, puis rechargé
+    dans rdi, rsi, … avant le `call`. Les push/pop s'annulent : rsp reste
+    aligné sur 16 après le prologue (push rbp + sub rsp frame_size).
+  - Les appels imbriqués dans les arguments sont autorisés (ex. f(g(x), y)).
+
+LIMITES v1 :
+  - maximum 6 arguments (registres ABI).
+  - arguments de type entier uniquement.
+
+INTERDICTION : ne PAS importer codegen_array / codegen_dict / codegen_base.
+────────────────────────────────────────────────────────────────────────────
 """
 
 from __future__ import annotations
@@ -80,11 +95,11 @@ def asm_fonction(info: FuncInfo, gen: object) -> str:
 
 
 def asm_appel(ast: Tree, scope: object, gen: object) -> str:
-    """ 
-    Evalue un appel de fonction. 
-    On effectue aussi des vérifications de nombre d'arguments.
-    # LIMITE : si un argument est lui-même un appel de fonction, par ex f(g(x), y),
-    # le call interne peut rompre l'alignement -> c'est donc interdit.
+    """Évalue un appel de fonction (résultat dans rax après le call).
+
+    Préconditions : fonction définie, arité correcte, chaque argument est un int.
+    Les appels imbriqués dans les arguments sont gérés (évaluation gauche→droite,
+    push/pop vers les registres, puis call — alignement pile conservé).
     """
 
     nom = ident(ast.children[0])

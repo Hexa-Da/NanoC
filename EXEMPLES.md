@@ -90,9 +90,14 @@ function fact(n) {
     return r;
 }
 
+function twice(x) {
+    return x * 2;
+}
+
 main() {
-    print(add(2, 3));   /* 5   */
-    print(fact(5));     /* 120 */
+    print(add(2, 3));                        /* 5   */
+    print(add(twice(2), twice(3)));            /* 10  : appels imbriqués dans les args */
+    print(fact(5));                          /* 120 */
     return 0;
 }
 ```
